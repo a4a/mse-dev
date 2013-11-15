@@ -1,0 +1,28 @@
+Package: FLa4a
+Type: Package
+Title: A simple and robust statistical catch at age model
+Version: 0.6.0
+Date: 2012-08-17
+Author: Colin Millar, Ernesto Jardim
+Maintainer: Colin Millar <colinpmillar@googlemail.com>
+Description: A simple and robust statistical catch at age model
+License: GPL (>= 2)
+Depends:
+    FLCore,
+    copula,
+    triangle,
+LazyLoad: yes
+Collate:
+    'FLModelSimMethods.R'
+    'FLModelSimMethods.R
+    Check
+    if
+    object
+    is
+    empty'
+    'assortedMethods.R'
+    'a4aM-class.R'
+    'a4aM-methods.R'
+    'a4aGr-class.R'
+    'a4aGr-methods.R'
+    'l2a-methods.R'

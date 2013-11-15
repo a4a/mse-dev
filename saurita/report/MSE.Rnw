@@ -1,0 +1,251 @@
+\documentclass[a4paper,english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{babel}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{amsmath}
+\usepackage[bottom]{footmisc}
+\geometry{verbose,a4paper,tmargin=3cm,bmargin=2cm,lmargin=2cm,rmargin=3cm}
+%\SweaveOpts{width=5.5, height=5.5}
+\setlength{\parskip}{\medskipamount}
+\setlength{\parindent}{0pt}
+\begin{document}
+\newcommand{\bm}[1]{\mbox{\boldmath $#1$}}
+\newcommand{\func}[2]{#1 \Big( #2 \Big)}
+\newcommand{\HCR}[1]{\func{\text{HCR}}{#1}}
+\newcommand{\Unif}[1]{\func{\text{Uniform}}{#1}}
+\newcommand{\LN}[1]{\func{\text{logNormal}}{#1}}
+\newcommand{\intext}[1]{\quad \text{#1} \quad}
+\newcommand{\TAC}{\text{TAC}}
+\newcommand{\mybullet}{\textbullet \phantom{ }}
+\title{MSE testing of factors likely to have an effect on catch surplus calculations through impacting MSY estimates}
+\author{Ernesto Jardim\footnote{ernesto.jardim@jrc.ec.europa.eu} (JRC)\\ Iago Mosqueira (JRC) \\ Colin Millar (JRC)\\ Chato Osio (JRC)\\ Aymen Charef (JRC)}
+\maketitle
+\begin{abstract}
+This work deals with uncertainty on the estimation of MSY considering the most likely factors to affect the stocks subject to Fisheries Partnership Agreements. A Management Strategy Evaluation algoritm was used using three management procedures. The traditional assessment based MSY HCR with a Btrigger and Ftarget, a catch base HCR that keeps catch at the average levels of a specified period, and a survey HCR based on the comparison of the average survey observations on a specified period and historical quantiles. The scenarios simulated try to give insights about factors that could have an impact on the estimation of MSY and indirectly on catch surplus: underestimation of catches, quality of the abundance, lag between assessments, distinct assessment models and over-catch. The results show that all these factors have impact on the estimation of MSY. Catch mis-reporting was not well captured by this MSE. The link between mis-reporting and implementation error requires more work. Biased survey indices have a huge impact on the estimation of K and, to a smaller extend, r. In the case of underestimation these impacts are larger and result in an unrealistic TAC that may lead to stock collapse. Having assessments at intervals of 3 or 5 years result in delays responding to increases or decreases in biomass. Using a Fox model has the effect of considering the stock to be more productive at lower levels of biomass which results in a higher TAC and lower biomasses.
+\end{abstract} 
+
+\pagebreak
+\section{Introduction}
+
+The MSE runs on a simulation of \emph{S.aurita}'s stock dynamics and exploitation but it can be adapted to other datasets. The OM is conditioned using CECAF's stock assessment results, life history parameters from Fishbase and a Beverton and Holt S/R. Three management procedures were tested. The usual MSY HCR, with a $B_{trigger}$ and a $F_{target}$, and an additional harvest rate limit $maxHR$. All is dealt in relative terms. A catch base HCR that keeps catch at the same level as the average of a specified period. A survey based HCR that reduces catches by 25\% if the average survey observations on a specified period are below the historical 10\% quantile and increases by 10 or 25\% if the average survey observations on a specified period are above the historical 90\% quantile. The Observation Error Model (OEM) introduces variability on the abundance index and bias both on the abundance index and catches. The Implementation Error Model (IEM) introduces bias on the TAC generating over-catches. The bias on catch, both on the OEM and IEM must be linked so that catches on the OM are of the same level.
+
+<<echo=FALSE, results=hide>>=
+library(FLAdvice)
+library(FLBioDym)
+library(plyr)
+library(FLCore)
+library(xtable)
+library(Hmisc)
+source("../analysis/funs.R")
+@
+
+<<>>=
+sessionInfo()
+@
+
+<<echo=FALSE>>=
+load("../analysis/.RData")
+@
+
+\section{Methods}
+
+\subsection{Management Strategies Evaluation (MSE)}
+
+In the equations that follow, different scenarios can be simulated by varying: the TAC lag $\lambda$, yeild and survey bias parameters $\gamma$ and $\delta$, survey observation error $\sigma_I^2$, (log scale) recruitment variability $\sigma_R^2$ and autocorrelation in recruitment; the $u$ terms induce a uniform 5\% error in the bias parameters they multiply i.e.
+
+\begin{align*}
+  u_t, u'_t, u''_t &\sim \Unif{0.95,\ 1.05} \\
+  \intext{and} \gamma u_t &\sim \Unif{0.95\gamma,\ 1.05\gamma}
+\end{align*}
+
+\begin{align*}
+  \intertext{\mybullet Operating Model}
+      N_{t+1,a+1} &= N_{ta}\exp(-Z_{ta}) \\
+      R_{t+1}     &= \func{\text{SRR}}{S_t} e_t (1 + 0.2 p_t) \\
+        & \qquad 
+        \intext{where} e_t \sim \LN{1,\ \sigma_R^2} 
+        \intext{and}   \text{SRR} = ( \text{Beverton \& Holt} ) 
+        \intext{and} p_t \sim \text{Pois}( 0.05 ) \\ 
+      C_{ta}     &= \frac{F_{ta}}{Z_{ta}}\Big(1-\exp(-Z_{ta})\Big)N_{ta} \\
+	  Y_t       &= \sum_a C_{ta}W_{ta} \\
+	  S_t       &= \sum_a N_{ta}W_{ta}\text{Mat}_{ta} \\
+	  B_t       &= \sum_a N_{ta}W_{ta}
+\intertext{for each age and year: $F$ and $Z$ are fishing and total mortality, $N$ stock numbers, $C$ catch numbers, $W$ mean weights and $\text{Mat}$ maturity; for each year: $R$ is recruits, $Y$ catch yield, $S$ spawning biomass and $B$ total biomass; while $\sigma_R^2$ is the variance about the stock recruit relationship SRR on the log scale.}
+%
+%
+  \intertext{\mybullet Implementation Error Model}
+      Y_t &= \frac{\TAC_t}{b_t u_t} \\
+      b_t &= \left\lbrace 
+        \begin{array}{ll}
+          \gamma   & \text{if} \quad \TAC_t < \min(\bm{Y}) \\
+          \gamma + \displaystyle\frac{\TAC_t - \min(\bm{Y})}{\max(\bm{Y}) - \min(\bm{Y})}(1 - \gamma) & \text{if} \quad \min(\bm{Y}) \leq \TAC_t \leq \max(\bm{Y}) \\
+           1                 & \text{if} \quad \TAC_t > \max(\bm{Y}) \\
+        \end{array} \right.
+\intertext{TAC is the total allowable catch and $\min(\bm{Y})$ and $\max(\bm{Y})$ are the minimum and maximum observed catch yeilds.}
+%
+%
+  \intertext{\mybullet Management Procedure}
+%  
+\intertext{     Harvest control rule (HCR) based on a biomass dynamic model (BDM).} 
+      \TAC_{t+\lambda_1} &= \HCR{\hat{B}_t, \hat{F}_t \Big| F_\text{trgt}, B_\text{trg}, HR_\text{max}} \intext{where} \lambda_1 = ( 2, 3, 5 ) \\
+      (\hat{B}_t,\hat{F}_t) &= \func{\text{BDM}}{\hat{Y}_t, \hat{I}_t}
+%
+\intertext{     HCR based on average catches.} 
+      \TAC_{t+\lambda_1} &= \lambda_2^{-1}\sum_{i=t-\lambda_2}^{t-1}{\hat{Y}_i} \quad  \intext{where} \lambda_1 = ( 2, 3, 5 ) \text{ and } \lambda_2 = 5
+%
+\intertext{     HCR based on survey trends.} 
+      \TAC_{t+\lambda_1} &= \lambda_2^{-1}\sum_{i=t-\lambda_2}^{t-1}{\hat{Y}_i} \beta \intext{where} \lambda_1 = ( 2, 3, 5 ) \intext{and} \lambda_2 = 5 \\
+	\beta &= \left\lbrace
+        \begin{array}{lllllll}
+        	1.1 & \text{if} & & & \lambda_3^{-1}\sum_{i=t-\lambda_3}^{t-1}{\hat{I}_i} & > & Q_{0.9}(\hat{I})  \\
+        	1 & \text{if} & Q_{0.1}(\hat{I}) & \leq & \lambda_3^{-1}\sum_{i=t-\lambda_3}^{t-1}{\hat{I}_i} & \leq & Q_{0.9}(\hat{I})  \\
+        	0.75 & \text{if} & Q_{0.1}(\hat{I}) & > & \lambda_3^{-1}\sum_{i=t-\lambda_3}^{t-1}{\hat{I}_i} & &   \\
+        \end{array} \right.\\
+   & \intext{where} Q_{x}(\hat{I}) \intext{is the quantile of historical survey observations}
+%
+%
+  \intertext{\mybullet Observation Error Model}
+      \hat{Y}_t &= Y_t \times \gamma u'_t \\
+      \hat{I}_t &\sim \LN{B_t \times \delta u''_t, \ \sigma_I^2}
+\end{align*}
+
+\subsection{Conditioning the Operating Model}
+
+Constructing an Operating Model (OM) for Sardinella involved generating an age-structured population model that mimicked, as close as possible, the population trajectory estimated by the CECAF stock assessment, while introducing a more complex structure that allowed a full range of simulations to be conducted. The model population was generated conditioned on the trends in abundances in the stock assessment and on the observed catches.
+
+The starting point for this OM was a set of life history relationships that link maximum length to many other biological parameters (Gislason et al, 2010). These relationships have been implemented in the FLR software packages (http://flr-project.org) as a function that builds the abundance-by-age structure of a stock given the life history parameters available, missing ones being substituted by generic relationships. In the case of S. aurita, the life history values used were as follows
+
+\begin{itemize}
+\item Maximum age = 8 years
+\item $L_{inf} = 28.5$
+\item Von Bertalanffy growth, with $k=0.4$, $t=-0.1$
+\item Beverton \& Holt stock recruitment relationship, $h=0.8$, $VB=1750$
+\end{itemize}
+
+A double normal selectivity curve was applied, with full selectivity assumed for all ages.
+
+This initial population, under a level of fishing mortality equal to that estimated  by the stock assessment at the start of the series ($HR_{1989} = 0.39$) was then projected at to 2010 with the same catches observed in the fishery. The CECAF stock assessment is based on a biomass dynamic model that incorporates environmental covariates affecting both the r and K parameters. Pulses in recruitment were simulated by introducing an 'environmental' covariate in the mean level parameter in the Beverton-Holt stock recruit model. This effectively rescales recruitment in certain years. The rescaling parameters were estimated by minimising the squared difference between the operating model SSB and the assessment SSB. In order to simulate this recruitment pattern in projections, the environmental covariate was simulated as a Poisson process with a rate of 1 event per 10 years to mimic what was observed in the assessment. Each event is assumed to increase recruitment by a factor of 2 or 4.
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+par(mfrow=c(2,1))
+plot(sa$hr~sa$year, type="l", ylim=c(0,1), main="Harvest Rate", ylab="", xlab="year")
+lines(c(iter(catch(saa)/stock(saa), 1))[-1]~sa$year, col=2)
+plot(sa$ssb~sa$year, type="l", ylim=c(0,2000), main="SSB", ylab="", xlab="year")
+lines(c(iter(ssb(saa),1))[-1]~sa$year, col=2)
+@
+\caption{SSB and harvest rate comparison between CECAF results (black) and operating model conditioning (red)}
+\label{fig:OM}
+\end{figure}
+
+\subsection{Management procedures}
+
+As specified above, three management procedures were tested. The traditional MSY HCR based on a Btrigger and a Ftarget. A catch base HCR that keeps catch at the same level as the average of a specified period. A survey based HCR that reduces catches by 25\% if the average survey observations on a specified period are below the historical 10\% quantile and increases by 10\% if the average survey observations on a specified period are above the historical 90\% quantile.  
+
+\subsection{Management Scenarios}
+
+The scenarios simulated try to give insights about the doubts raised during the discussion of the factors that could have an impact on the estimation of MSY and indirectly on catch surplus.
+
+\begin{itemize}
+	\item Underestimation of catches - which is being modelled through the introduction of bias in catches provided to the assessment model by the OEM. It reflects the situation where company owners under-report catches to the coastal state. 
+	\item Abundance index low quality - which is being modelled trough the introduction of bias and variability on the abundance index provided to the assessment model by the OEM. Bias models the effect of having surveys that don't cover the full distribution of the stock. A bias smaller than 1 reflects an underestimation of biomass and vice versa. It's common to use exploratory fishing surveys, which will most of the times look for hot spots of abundance and their estimates of abundance will most likely biased towards higher than reality abundances. On the other hand mixing surveys from different periods and carried out with several vessels, will increase the variability of the abundance index. 
+	\item Lag between assessments - is modelled trough the introduction of years without assessment during which the TAC is kept constant as computed on the last assessment. More sophisticated approaches could be implemented if time allows. The simulation assumes that lags between assessments are regular, which is not (always ?) the case. It shouldn't be difficult to implement irregular assessment periods, that will reflect a lack of strategy towards management advice.
+	\item Over-catch - it's implemented with two distinct Implementation Error Models (IEM), a constant ratio and a ratio that decreases linearly with the increase in TAC. The idea is that over-catch increases with the decrease in the TAC, which seems more realistic that keeping over-catch with a constant ratio.  
+\end{itemize}     
+
+\pagebreak
+
+\section{Results}
+
+\subsection{Management Scenarios}
+
+Management scenarios were selected during the meeting in a process of exploration and discussion results and their relevance for the work being done. The list on Table~\ref{tab:tab1} present the characteristics of the scenarios simulated. The table presents the scenario name (ref), HCR biomass trigger (Btrig), HCR fishing mortality target (Ftar), HCR maximum harvest rate (maxHR), year lag on assessment ($\lambda_1$ in equations, aLag in table), OEM survey bias ($\delta$ in equations, srvBias in table), OEM catch bias ($\gamma$ in equations, cthBias in table), survey HCR period for computing average ($\lambda_3$ in equations, slag in table), catch HCR period for computing average ($\lambda_2$ in equations, clag in table) and the type of HCR (am) which may be \emph{bd} for biomass dynamic model, \emph{srv} for survey based and \emph{cth} for catch based. 
+
+<<results=tex, echo=FALSE>>=
+tab <- scn[,!(names(scn) %in% c("runid","p", "IEM", "b0"))]
+xtable(tab, caption="Management scenarios", label="tab:tab1")
+@
+
+\subsection{Simulations}
+
+The simulations chosen by the group are represented on the Figures~\ref{fig:base} to \ref{fig:wc}. In each figure it's shown a comparison with the base scenario which includes the usual stock parameters, F, SSB, catch and recruitment, as well as the assessment model parameters and the HCR outcomes.
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=qtl, data=subset(base.summ, ref=="base"), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(lty=c(2,1,2), col=c(2,1,2))), type="l", par.strip.text=list(cex=0.5), ylab="year")
+@
+\caption{Base case results}
+\label{fig:base}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("base", "aLag3", "aLag5") & qtl==0.5 & par %in% c("ssb", "fbar", "catch", "rec")), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("red", "green", "grey20"))), type="l", ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=3))
+@
+\caption{Assessment lag effect, 1, 3 and 5 year lag between assessments}
+\label{fig:alag}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("base", "cthBias0.5", "cthBias0.8") & qtl==0.5), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("grey40", "red", "green"))), type="l", par.strip.text=list(cex=0.5), ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=3))
+@
+\caption{Underreporting effect, bias=0.5, 0.2}
+\label{fig:cthBias}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("base", "srvBias0.5", "srvBias1.5") & qtl==0.5), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("grey40", "red", "green"))), type="l", par.strip.text=list(cex=0.5), ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=3))
+@
+\caption{Survey coverage effect, bias=0.5, 1.5}
+\label{fig:srvBias}
+\end{figure}
+
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("base", "srv", "cth") & qtl==0.5), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("grey40", "red", "green"))), type="l", par.strip.text=list(cex=0.5), ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=3))
+@
+\caption{Alternative management procedures, survey and mean catch}
+\label{fig:mp}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("srv", "srvBias0.75") & qtl==0.5), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("red", "green"))), type="l", par.strip.text=list(cex=0.5), ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=2))
+@
+\caption{Survey coverage effect, bias=0.5, 0.75+higher variability on mean}
+\label{fig:mpsrv}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("base", "fox") & qtl==0.5), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("grey40", "red"))), type="l", par.strip.text=list(cex=0.5), ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=2))
+@
+\caption{Fox vs Schaeffer models}
+\label{fig:fox}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+<<fig=TRUE, echo=FALSE>>=
+xyplot(data~year|par, groups=ref, data=subset(base.summ, ref %in% c("base", "worstCase") & qtl==0.5), scales=list(y=list(relation="free")), par.settings=list(superpose.line=list(col=c("grey40", "red")), superpose.symbol=list(pch=19, col=c("grey40", "red"), cex=0.2)), type="b", par.strip.text=list(cex=0.5), ylab="year", auto.key=list(lines=TRUE, points=FALSE, columns=2))
+@
+\caption{Worst case scenario}
+\label{fig:wc}
+\end{figure}
+\end{document}
+
+

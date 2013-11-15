@@ -1,0 +1,50 @@
+# example
+
+mm <- matrix(NA, ncol=3, nrow=3)
+diag(mm) <- c(100, 0.001,0.001)
+mm[upper.tri(mm)] <- mm[lower.tri(mm)] <- c(0.1,0.1,0.0003)
+
+vb <- FLModelSim(model=~linf*(1-exp(-k*(t-t0))), params=FLPar(linf=120, k=0.3, t0=0.1, units=c("cm","ano-1","ano")), vcov=mm, distr="norm")
+
+mmm <- predict(mvrlnorm(100, vb), t=0:20)
+boxplot(as.data.frame(t(mmm)))
+
+invvb <- FLModelSim(model=~t0-1/k*log(1-len/linf), params=FLPar(linf=120, k=0.3, t0=0.1, units=c("cm","ano-1","ano")), vcov=mm, distr="norm")
+mmm <- predict(mvrlnorm(100, invvb), len=1:160)
+boxplot(as.data.frame(t(mmm)))
+
+##' # include a growth model
+##' mod1 <- FLModelSim(model=~exp(-age-0.5))
+##' mod2 <- FLModelSim(model=~1.5*k, params=FLPar(k=0.4))
+##' m1 <- a4aM(shape=mod1, level=mod2)
+##' vbObj <- a4aGr(grMod=~linf*(1-exp(-k*(t-t0))), grInvMod=~t0-1/k*log(1-len/linf), params=FLPar(linf=60, k=0.1, t0=0, units=c("cm","ano-1","ano")))
+##' m(m1, age=0:10)/m(m1, age=0:10, grMod=vbObj) == 0.4/0.1
+
+
+#' # red fish
+#' # M=0.05; Linf=58.5, k=0.086
+#' mm <- matrix(NA, ncol=3, nrow=3)
+#' diag(mm) <- c(50, 0.001,0.001)
+#' mm[upper.tri(mm)] <- mm[lower.tri(mm)] <- c(0.1,0.01,0.00004)
+#' vbObj <- a4aGr(grMod=~linf*(1-exp(-k*(t-t0))), grInvMod=~t0-1/k*log(1-len/linf), params=FLPar(linf=58.5, k=0.086, t0=0.001, units=c("cm","ano-1","ano")), vcov=mm, distr="norm")
+#' data(rfLen)
+#' cth <- rfLenCth 
+#' # both with iter=1
+#' cthA1 <- l2a(cth, vbObj)
+#' # both with iter=n
+#' cthA2 <- l2a(propagate(cth,10), mvrnorm(10, vbObj))
+#' # mod: iter=n, data: iter=1
+#' cthA3 <- l2a(cth, mvrnorm(10, vbObj))
+#' # mod: iter=1, data: iter=n
+#' cthA4 <- l2a(propagate(cth,10), vbObj)
+#' # the following should give the same result for all
+#' \donotrun{
+#' sum(cth[,,,,,1])
+#' sum(cthA1[,,,,,1])
+#' sum(cthA2[,,,,,1])
+#' sum(cthA3[,,,,,1])
+#' sum(cthA4[,,,,,1])
+#' }
+#' # mod: iter=n1, data: iter=n2 - MUST FAIL
+#' \donotrun{l2a(propagate(cth,5), mvrnorm(10, vbObj))}
+
