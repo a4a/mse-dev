@@ -39,7 +39,6 @@ setMethod("a4aRule", signature(object="missing"),
   }
 )
 
-
 # accessors and replacements
 genAR(a4aRule())
 

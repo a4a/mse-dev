@@ -83,15 +83,23 @@ predict(o1, c=catch(ple4))
 
 setClass("a4aHCR",
         representation(
-				objective = "a4aRule",
-				constraints = "a4aRule",
-				softLimit = "a4aRule",
-				hardLimit = "a4aRule"),
+#				objective = "a4aRule",
+#				constraints = "a4aRule",
+#				softLimit = "a4aRule",
+#				hardLimit = "a4aRule"),
+				objective = "a4aHCRvar",
+				constraints = "a4aHCRvar",
+				softLimit = "a4aHCRvar",
+				hardLimit = "a4aHCRvar"),
         prototype = prototype(
-				objective = a4aRule(),
-				constraints = a4aRule(),
-				softLimit = a4aRule(),
-				hardLimit = a4aRule())
+#				objective = a4aRule(),
+#				constraints = a4aRule(),
+#				softLimit = a4aRule(),
+#				hardLimit = a4aRule())
+				objective = a4aHCRvar(),
+				constraints = a4aHCRvar(),
+				softLimit = a4aHCRvar(),
+				hardLimit = a4aHCRvar())
 )
 
 setGeneric("a4aHCR", function(object, ...) standardGeneric("a4aHCR"))
@@ -130,12 +138,13 @@ setMethod("fwdControl", signature(object="a4aHCR"),
 
 o1 <- a4aHCRvar(type="f", model=~0.35)
 
-hcr1 <- a4aHCR(objective=a4aRule(obsVar="f", refVal=FLQuant(0.35)))
+hcr1 <- a4aHCR(objective=a4aHCRvar(obsVar="f", refVal=FLQuant(0.35)))
 fwdControl(hcr1, yrs=2000:2001)
 
 # mean catch from the last 3 years
 
 o1 <- a4aHCRvar(type="c", model=~mean(c), refYr=0:-2)
+o1 <- a4aRule(type="c", model=~mean(c), refYr=0:-2)
 hcr1 <- a4aHCR(objective=o1)
 fwdControl(hcr1, yrs=2000:2001)
 
