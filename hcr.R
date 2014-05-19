@@ -3,20 +3,17 @@
 
 setClass("a4aHCRvar",
         representation(
-				type = "character",
-				timeOrder = "numeric",
+				quantity = "character", # change name to "quantity"
                 model = "formula", 
-				# if no model, params used in fwdControl and refYr used to set rel.year !?
 				params = "FLPar",
-				refYr = "numeric"),
+				refYr = "numeric",
+				range = "numeric"),
         prototype = prototype(
-				type = vector(mode="character"),
-				timeOrder = 1,
-#                model = ~a,
-#				params = new("FLPar", array(1, dim=c(1,1), dimnames=list(params="a", iter="1"))),
+				quantity = vector(mode="character"),
                 model = ~1,
 				params = new("FLPar"),
-				refYr = vector(mode="numeric"))
+				refYr = -1,
+				range = NaN)
 )
 
 setGeneric("a4aHCRvar", function(object, ...) standardGeneric("a4aHCRvar"))
@@ -37,11 +34,11 @@ setMethod("a4aHCRvar", signature(object="missing"),
 
 setMethod("params", "a4aHCRvar", function(object) object@params)
 setMethod("model", "a4aHCRvar", function(object) object@model)
-setMethod("type", "a4aHCRvar", function(object) object@type)
+setGeneric("quantity", function(object, ...) standardGeneric("quantity"))
+setMethod("quantity", "a4aHCRvar", function(object) object@quantity)
 setGeneric("refYr", function(object, ...) standardGeneric("refYr"))
 setMethod("refYr", "a4aHCRvar", function(object) object@refYr)
-setGeneric("timeOrder", function(object, ...) standardGeneric("timeOrder"))
-setMethod("timeOrder", "a4aHCRvar", function(object) object@timeOrder)
+setMethod("range", "a4aHCRvar", function(x) x@range)
 
 setMethod("predict", signature(object="a4aHCRvar"),	function (object, ...){
     args <- list(...)
@@ -50,10 +47,15 @@ setMethod("predict", signature(object="a4aHCRvar"),	function (object, ...){
 	ryr <- refYr(object) 
 	cvar <- match(all.vars(mod), names(args), nomatch=0)
 	if(sum(cvar)>0){
+		cvar <- names(args)[cvar]
 		lst <- lapply(split(cvar, cvar), function(x){
-			if(is(args[[x]], "FLQuant")) args[[x]][,getYidx(args[[x]], ryr)] 
+			if(is(args[[x]], "FLQuant")){
+				args[[x]][,getYidx(args[[x]], ryr)]
+			} else {
+				args[[x]]
+			}
 		})
-		args[cvar] <- lst
+		args[cvar] <- lapply(lst, c)
 	} 
 
     res <- apply(pr, 2, function(x) {
@@ -65,17 +67,47 @@ setMethod("predict", signature(object="a4aHCRvar"),	function (object, ...){
     return(res)
 })
 
-# example
-o1 <- a4aHCRvar(type="f", timeOrder=1, model=~Ftrg, params=FLPar(Ftrg=0.35))
+# examples
+o1 <- a4aHCRvar(quantity="f", model=~Ftrg, params=FLPar(Ftrg=0.35))
 predict(o1)
 # it's all the same
 data(ple4)
-o1 <- a4aHCRvar(type="c", model=~mean(c), refYr=2005:2007)
-predict(o1, c=catch(ple4))
-o1 <- a4aHCRvar(type="c", model=~mean(c), refYr=-1:-3)
-predict(o1, c=catch(ple4))
-o1 <- a4aHCRvar(type="c", model=~mean(c), refYr=49:51)
-predict(o1, c=catch(ple4))
+o1 <- a4aHCRvar(quantity="catch", model=~mean(catch), refYr=2005:2007)
+predict(o1, catch=catch(ple4))
+o1 <- a4aHCRvar(quantity="catch", model=~mean(catch), refYr=-2:-4)
+predict(o1, catch=catch(ple4))
+o1 <- a4aHCRvar(quantity="catch", model=~mean(catch), refYr=49:51)
+predict(o1, catch=catch(ple4))
+
+# using ssb to get catch
+o1 <- a4aHCRvar(quantity="catch", model=~f*SSB, params=FLPar(f=0.35), refYr=-1)
+predict(o1, SSB=ssb(ple4))
+
+# a more complex one
+o1 <- a4aHCRvar(quantity="catch", model=~sum(f/(m+f)*(1-exp(-(m+f)))*N*w), params=FLPar(f=0.35), refYr=-1)
+predict(o1, N=stock.n(ple4), m=m(ple4), w=stock.wt(ple4))
+
+# in this case we wouldn't need limits, they're defined by the range
+f0 <- a4aHCRvar(quantity="catch", model=~0, refYr=-1, range=c(0,10))
+f0.35 <- a4aHCRvar(quantity="catch", model=~f*SSB, params=FLPar(f=0.35), refYr=-1, range=c(10,20))
+fmax <- a4aHCRvar(quantity="catch", model=~10, refYr=-1, range=c(20,Inf))
+
+# constraints
+cnst <- a4aHCRvar(quantity="catch", model=~if(C >= mult * c) mult * c else C , params=FLPar(mult=1.1), refYr=-1, range=c(20,Inf))
+
+predict(cnst, C=predict(f0.35, SSB=ssb(ple4)), c=catch(ple4))
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # validity
@@ -83,23 +115,17 @@ predict(o1, c=catch(ple4))
 
 setClass("a4aHCR",
         representation(
-#				objective = "a4aRule",
-#				constraints = "a4aRule",
-#				softLimit = "a4aRule",
-#				hardLimit = "a4aRule"),
 				objective = "a4aHCRvar",
 				constraints = "a4aHCRvar",
-				softLimit = "a4aHCRvar",
-				hardLimit = "a4aHCRvar"),
+				limit = "a4aHCRvar",
+				precedence = "numeric",
+				range = "numeric"),
         prototype = prototype(
-#				objective = a4aRule(),
-#				constraints = a4aRule(),
-#				softLimit = a4aRule(),
-#				hardLimit = a4aRule())
 				objective = a4aHCRvar(),
 				constraints = a4aHCRvar(),
-				softLimit = a4aHCRvar(),
-				hardLimit = a4aHCRvar())
+				limit = a4aHCRvar(),
+				precedence = NA,
+				range = NA)
 )
 
 setGeneric("a4aHCR", function(object, ...) standardGeneric("a4aHCR"))
@@ -119,16 +145,23 @@ setMethod("a4aHCR", signature(object="missing"),
 )
 
 # accessors
-genAR(a4aHCR())
+setGeneric("objective", function(object, ...) standardGeneric("objective"))
+setMethod("objective", "a4aHCR", function(object) object@objective)
+setGeneric("constraints", function(object, ...) standardGeneric("constraints"))
+setMethod("constraints", "a4aHCR", function(object) object@constraints)
+setGeneric("softLimit", function(object, ...) standardGeneric("softLimit"))
+setMethod("softLimit", "a4aHCR", function(object) object@softLimit)
+setGeneric("hardLimit", function(object, ...) standardGeneric("hardLimit"))
+setMethod("hardLimit", "a4aHCR", function(object) object@hardLimit)
 
-
+# method to create fwdControl object
 setMethod("fwdControl", signature(object="a4aHCR"),
   function(object, yrs, ...) {
 	args <- list(...)
 	args$yrs <- yrs
 	obj <- objective(object)
 	# iters ??
-	trg <- data.frame(quantity=obsVar(obj), val=c(predict(obj)), year=args$yrs, timeOrder=timeOrder(obj))
+	trg <- data.frame(quantity=type(obj), val=c(predict(obj)), year=args$yrs, timeOrder=timeOrder(obj))
 	trg <- fwdControl(trg)
 	trg
   }
@@ -138,13 +171,12 @@ setMethod("fwdControl", signature(object="a4aHCR"),
 
 o1 <- a4aHCRvar(type="f", model=~0.35)
 
-hcr1 <- a4aHCR(objective=a4aHCRvar(obsVar="f", refVal=FLQuant(0.35)))
+hcr1 <- a4aHCR(objective=o1)
 fwdControl(hcr1, yrs=2000:2001)
 
 # mean catch from the last 3 years
 
-o1 <- a4aHCRvar(type="c", model=~mean(c), refYr=0:-2)
-o1 <- a4aRule(type="c", model=~mean(c), refYr=0:-2)
+o1 <- a4aHCRvar(model=~mean(c), refYr=-1:-3, FUN="harvest")
 hcr1 <- a4aHCR(objective=o1)
 fwdControl(hcr1, yrs=2000:2001)
 
