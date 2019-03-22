@@ -1,0 +1,190 @@
+# FS, EJ, IM (12082016)
+
+# Make the stocks, SRRs and other bits for the MSE
+
+# Two stocks:
+# SQ - for baseline option
+# 20% - F on trawlers in 2017 is 20% down that of 2016
+# Two SRRs: geomean and Bevholt
+
+#==============================================================================
+# libraries and auxiliary functions
+#==============================================================================
+
+rm(list=ls())
+library(FLa4a)
+library(FLash)
+library(FLAssess)
+library(ggplotFL)
+library(FLBRP)
+source("funs.R")
+set.seed(0)
+# Load reference points
+refp <- read.csv("../data/input/stock_refpts.csv")
+
+#==============================================================================
+# Load the stock and files 
+#==============================================================================
+
+# This will be stock specific
+stk_file <- "HKE_09-10-11_EWG15_11_.RData"
+idx_file <- "index_HKE_09-10-11_EWG15_11_.RData"
+
+load(paste("../data/input/", stk_file, sep=""))
+load(paste("../data/input/", idx_file, sep=""))
+# Name has - so need `
+stk <- `HKE_09-10-11_EWG15_11`
+idx <- `index_HKE_09-10-11_EWG15_11`
+names(idx) <- letters[1:length(idx)]
+
+# Hack for hake - fix units as messing with SRR plot
+units(stock.wt(stk)) <- "kg"
+units(catch.wt(stk)) <- "kg"
+units(landings.wt(stk)) <- "kg"
+units(discards.wt(stk)) <- "kg"
+
+#==============================================================================
+# Variables
+#==============================================================================
+
+it <- 50 # iterations
+fy <- 2036 # final year
+y0 <- range(stk)["minyear"] # initial data year 
+dy <- range(stk)["maxyear"] # final data year
+iy <- 2017 # initial year of projection (also intermediate)
+ny <- fy - iy + 1 # number of years to project from intial year
+nsqy <- 3 # number of years to compute status quo metrics
+
+#==============================================================================
+# Fit a4a model to replicate official assessment as much as possible
+#==============================================================================
+
+# fit (to match official assessment, quality of fit not so important)
+qmod <- list(~s(age, k=5), ~s(age, k=4), ~s(age, k=4), ~s(age, k=5))
+fmod <- ~ s(I(year - replace(age, age>5,5)), k = 3) + te(replace(age, age>5,5), year, k=c(3,6)) + s(year, k = 4, by = as.numeric(age==0))
+fit <- sca(stk, idx, fmodel=fmod, qmodel=qmod, fit="assessment")
+
+#plot(residuals(fit, stk, idx))
+#wireframe(data~age + year|qname, data=as.data.frame(FLQuants(a4a=harvest(stk+fit), orig=harvest(stk))), groups=qname, main="fishing mortality")
+#plot(FLStocks(orig=stk, a4a=stk+simulate(fit, 250)))
+flq <- FLQuants(xsa=harvest(stk), a4a=harvest(fit))
+#xyplot(data~age|year, groups=qname, data=flq, type="l", auto.key=list(points=FALSE, lines=TRUE))
+
+# Add uncertainty to the stock based on uncertainty in the stock assessment 
+mcmc <- 20000
+mcsave <- mcmc / it
+sstk <- stk + a4aSCA(stk, idx, fmodel=fmod, qmodel=qmod, fit="MCMC", mcmc = SCAMCMC(mcmc = mcmc, mcsave = mcsave, mcprobe = 0.4))
+
+#png(paste("../data/conditioned/", strsplit(stk_file, "\\.")[[1]][1], ".png", sep=""), 800,800)
+#plot(FLStocks(orig=stk, stoch=sstk))
+#dev.off()
+
+# update stk object
+stk <- stk + fit
+
+#==============================================================================
+# Refpts
+#==============================================================================
+
+# Get reference points from refpts table and calc others
+refpts <- c(subset(refp, stock=="HKE_09-11")[,c("fmsy","blim","prop_otb")])
+refpts$flo <- 0.00296635 + 0.66021447*refpts$fmsy
+refpts$fup <- 0.007801555 + 1.349401721*refpts$fmsy
+# If blim is not set in the table then calculate it
+if(is.na(refpts$blim)){
+    refpts$blim <- min(ssb(stk))
+}
+refpts$bsafe = refpts$blim * qnorm(0.975)
+
+#==============================================================================
+# Make SRRs
+#==============================================================================
+
+# Geomean - of entire stock history - not last few years
+srgm <- as.FLSR(stk, model="geomean")
+params(srgm)["a",] <- exp(mean(log(rec(stk))))
+# Or fit for the same result (can then plot)
+#srgm <- fmle(as.FLSR(stk, model="geomean"), method="Brent", lower=0,upper=1e12)
+# Residuals
+resgm <- ar1rlnorm(rho=0, years= dy:fy, iters=it, margSD=mad(c(log(rec(stk)))))
+# Or mean and residuals combined. Set params(srgm) to 1
+#recGM <- ar1rlnorm(rho=0.8, years=dy:fy, iters=it,
+#    margSD=mad(c(log(rec(stk))))) %*% exp(yearMeans(log(rec(stk))))
+
+# BevHolt
+srbh <- fmle(as.FLSR(stk, model="bevholt"), method="L-BFGS-B", lower=c(1e-6, 1e-6), upper=c(max(rec(stk)) * 3, Inf))
+predict(srbh, ssb=FLQuant(3000))
+
+#plot(srbh) 
+# Residuals
+resbh <- ar1rlnorm(rho=0.8, years=dy:fy, iters=it, margSD=mad(c(residuals(srbh))))
+
+#==============================================================================
+# Set up operating stocks
+#==============================================================================
+
+# Set up future assumptions - means of 5 years
+pstk <- stf(sstk, fy-dy, nsqy, nsqy) 
+
+# Set up baseline stock
+bstk <- pstk
+# Project to 2017 from last data year using SQ assumptions
+fsq <- yearMeans(fbar(sstk)[,ac((dy-nsqy+1):dy)]) 
+ctrl <- getCtrl(fsq, "f", (dy+1):2017, it)
+# Mean recruitment
+gmean_rec <- c(exp(yearMeans(log(rec(sstk)[,ac((dy-nsqy+1):dy)]))))
+# Project including residuals from geomean SRR from above
+bstk <- fwd(bstk, ctrl=ctrl, sr=list(model="mean", params = FLPar(gmean_rec,iter=it)), sr.residuals=resgm)
+# Add median fsq to refpts to be used in baseline projection
+refpts$fsq <- median(fsq)
+
+# Option 1 and 2 require a 20% decrease in fishing capacity from 2017 in accordance with current plan.
+# We don't have catch-at-age by gear from which to change the selectivity.
+# We only have proportion of total catches that come from trawling.
+# However, for almost all stocks the proportion of catch from trawling is 90-100%.
+# Therefore, assume that selectity is dominated by trawlers.
+# Keep selection pattern the same but decrease F in 2017 for initial projection.
+# Reduce F in 2017 by 20% of trawl_prop across all ages
+ctrl@trgtArray["2017","val",] <- ctrl@trgtArray["2017","val",] * (1 - refpts$prop_otb * 0.2)
+pstk <- fwd(pstk, ctrl=ctrl, sr=list(model="mean", params = FLPar(gmean_rec,iter=it)), sr.residuals=resgm)
+
+#==============================================================================
+# Operating indices
+#==============================================================================
+
+# Estimate the indices catchability from the a4a fit (without simulation)
+
+# Use all indices
+idcs <- FLIndices()
+for (i in 1:length(idx)){
+    lst <- mcf(list(idx[[i]]@index, stock.n(stk)))
+    idx.lq <- log(lst[[1]]/lst[[2]]) # log catchability of index
+    idx.qmu <- idx.qsig <- stock.n(iter(pstk,1)) # empty quant
+    idx.qmu[] <- yearMeans(idx.lq) # Every year has the same mean catchability
+    idx.qsig[] <- log((sqrt(yearVars(idx.lq))/yearMeans(idx.lq))^2 + 1) # Every year has same SD - check other methods
+    idx.q <- FLQuant(NA, dimnames=dimnames(stock.n(pstk)))
+    idx.q[,ac(dimnames(stock.n(pstk))$year[1]:dy)] <- propagate(exp(idx.lq[,ac(dimnames(stock.n(pstk))$year[1]:dy)]), it)
+    idx.q <- rlnorm(it, idx.qmu, idx.qsig) # Build FLQ of index catchability based on lognormal distribution with mean and sd calced above
+    idx_temp <- idx.q * stock.n(pstk)
+    idx_temp <- FLIndex(index=idx_temp, index.q=idx.q) # generate initial index
+    range(idx_temp)[c("startf", "endf")] <- c(0, 0)
+    idcs[[i]] <- idx_temp
+}
+names(idcs) <- names(idx)
+
+#==============================================================================
+# Save as single file to be used by MSE script
+#==============================================================================
+
+stock_data <- list(stk20 = pstk,
+                   idx=idcs,
+                   bstk = bstk,
+                   refpts = refpts,
+                   srbh = srbh,
+                   srbh.res = resbh[,ac((iy+1):fy),,,,1:it],
+                   srgm=srgm,
+                   srgm.res = resgm[,ac((iy+1):fy),,,,1:it]
+                   )
+
+save(stock_data, file="hake_091011_50it.RData")
+
