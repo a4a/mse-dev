@@ -253,7 +253,7 @@ load_all("/home/gamitjo/devel/FLR/pkgs/mse")
 registerDoParallel(3)
 mpargs$nblocks <- 3
 set.seed(1234)
-resp3biem1 <- mp(om, oem, iem2, ctrl.mp=ctrl, genArgs=mpargs)
+resp3biem1b <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
 iem <- FLiem(method=noise.iem, args=list(fun="rlnorm", mean=0, sd=0, multiplicative=TRUE))
 
