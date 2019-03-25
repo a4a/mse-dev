@@ -260,10 +260,18 @@ iem <- FLiem(method=noise.iem, args=list(fun="rlnorm", mean=0, sd=0, multiplicat
 mpargs$management_lag <- 2
 resp3biem2 <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
+#==============================================================================
+# effort is
+#==============================================================================
+ctrl <- mpCtrl(list(ctrl.hcr = mseCtrl(method=fixedF.hcr, args=list(ftrg=0.3)),
+	ctrl.is = mseCtrl(method=effort.is),
+	ctrl.est = mseCtrl(method=perfect.sa)))
 
-
-
-
+registerDoParallel(3)
+mpargs$nblocks <- 3
+set.seed(1234)
+mpargs$management_lag <- 2
+resp3beff <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
 
 
