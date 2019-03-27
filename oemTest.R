@@ -33,7 +33,7 @@ idx <- ple4.indices["BTS-Combined (all)"]
 
 # VARIABLES
 
-it <- 3 # iterations
+it <- 250 # iterations
 fy <- 2030 # final year
 y0 <- range(stk)["minyear"] # initial OM year
 dy <- range(stk)["maxyear"] # final OM year
@@ -178,22 +178,7 @@ oem <- FLoem(method=sampling.oem, observations=obs, deviances=dev)
 # Implementation error
 ###############################################################################
 
-iem <- FLiem(method=noise.iem, args=list(fun="rlnorm", mean=0, sd=0, multiplicative=TRUE))
-
-noise.iem2 <- function(ctrl, fun="rlnorm", mean=0, sd=0.1, multiplicative=TRUE, genArgs, tracking){
-  # eh? number of non NA values in target. But if there are NAs then we need to
-  # know their position for the *ctrl@trgtArray later
-  ctrl@trgtArray[,"val",] <- tracking["metric.is",ac(genArgs$ay-genArgs$management_lag+1)]
-	iem <- list(mean = mean, sd = sd, n = sum(!is.na(ctrl@trgtArray)))
-	if(multiplicative){
-		ctrl@trgtArray <- do.call(fun, iem) * ctrl@trgtArray
-	} else {
-		ctrl@trgtArray <- do.call(fun, iem) + ctrl@trgtArray
-	}
-	list(ctrl=ctrl, tracking=tracking)
-}
-
-iem2 <- FLiem(method=noise.iem2, args=list(fun="rlnorm", mean=0, sd=0, multiplicative=TRUE))
+iem <- FLiem(method=noise.iem, args=list(fun="rlnorm", mean=0, sd=0.1, multiplicative=TRUE))
 
 ###############################################################################
 # Management procedure
@@ -202,63 +187,63 @@ iem2 <- FLiem(method=noise.iem2, args=list(fun="rlnorm", mean=0, sd=0, multiplic
 # general pars, add seed
 mpargs$seed <- 1234
 
-#==============================================================================
-# Scenarios
-#==============================================================================
+##==============================================================================
+## Scenarios
+##==============================================================================
 
-#------------------------------------------------------------------------------
-# base with TAC and SA
-#------------------------------------------------------------------------------
-ctrl <- mpCtrl(list(ctrl.hcr = mseCtrl(method=fixedF.hcr, args=list(ftrg=0.3)),
-	ctrl.is = mseCtrl(method=tac.is),
-	ctrl.est = mseCtrl(method=sca.sa)))
+##------------------------------------------------------------------------------
+## base with TAC and SA
+##------------------------------------------------------------------------------
+#ctrl <- mpCtrl(list(ctrl.hcr = mseCtrl(method=fixedF.hcr, args=list(ftrg=0.3)),
+#	ctrl.is = mseCtrl(method=tac.is),
+#	ctrl.est = mseCtrl(method=sca.sa)))
 
-# run new method in 2 cores with foreach
-registerDoParallel(3)
-mpargs$nblocks <- 3
-resp3b <- mp(om, oem, ctrl.mp=ctrl, genArgs=mpargs)
+## run new method in 2 cores with foreach
+#registerDoParallel(3)
+#mpargs$nblocks <- 3
+#resp3b <- mp(om, oem, ctrl.mp=ctrl, genArgs=mpargs)
 
 
-#------------------------------------------------------------------------------
-# base with TAC and SA
-#------------------------------------------------------------------------------
+##------------------------------------------------------------------------------
+## base with TAC and SA
+##------------------------------------------------------------------------------
+##install.packages("mse", repos="http://flr-project.org/R")
+
+#registerDoParallel(3)
+#mpargs$nblocks <- 3
+#resp3b0 <- mp(om, oem, ctrl.mp=ctrl, genArgs=mpargs)
+
+#> all.equal(resp3b0, resp3b)
+#[1] TRUE
+
+##------------------------------------------------------------------------------
+## base with TAC and SA
+##------------------------------------------------------------------------------
+##load_all("/home/gamitjo/devel/FLR/pkgs/mse")
+#registerDoParallel(3)
+#mpargs$nblocks <- 3
+#resp3b2 <- mp(om, oem, ctrl.mp=ctrl, genArgs=mpargs)
+
+##==============================================================================
+## IEM tests
+##==============================================================================
+
 #install.packages("mse", repos="http://flr-project.org/R")
+#registerDoParallel(3)
+#mpargs$nblocks <- 3
+#set.seed(1234)
+#resp3biem0 <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
-registerDoParallel(3)
-mpargs$nblocks <- 3
-resp3b0 <- mp(om, oem, ctrl.mp=ctrl, genArgs=mpargs)
-
-> all.equal(resp3b0, resp3b)
-[1] TRUE
-
-#------------------------------------------------------------------------------
-# base with TAC and SA
-#------------------------------------------------------------------------------
 #load_all("/home/gamitjo/devel/FLR/pkgs/mse")
-registerDoParallel(3)
-mpargs$nblocks <- 3
-resp3b2 <- mp(om, oem, ctrl.mp=ctrl, genArgs=mpargs)
+#registerDoParallel(3)
+#mpargs$nblocks <- 3
+#set.seed(1234)
+#resp3biem1b <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
-#==============================================================================
-# IEM tests
-#==============================================================================
+#iem <- FLiem(method=noise.iem, args=list(fun="rlnorm", mean=0, sd=0, multiplicative=TRUE))
 
-install.packages("mse", repos="http://flr-project.org/R")
-registerDoParallel(3)
-mpargs$nblocks <- 3
-set.seed(1234)
-resp3biem0 <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
-
-load_all("/home/gamitjo/devel/FLR/pkgs/mse")
-registerDoParallel(3)
-mpargs$nblocks <- 3
-set.seed(1234)
-resp3biem1b <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
-
-iem <- FLiem(method=noise.iem, args=list(fun="rlnorm", mean=0, sd=0, multiplicative=TRUE))
-
-mpargs$management_lag <- 2
-resp3biem2 <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
+#mpargs$management_lag <- 2
+#resp3biem2 <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
 #==============================================================================
 # effort is
@@ -267,35 +252,25 @@ ctrl <- mpCtrl(list(ctrl.hcr = mseCtrl(method=fixedF.hcr, args=list(ftrg=0.3)),
 	ctrl.is = mseCtrl(method=effort.is),
 	ctrl.est = mseCtrl(method=perfect.sa)))
 
-registerDoParallel(3)
-mpargs$nblocks <- 3
+registerDoParallel(8)
+mpargs$nblocks <- 250
 set.seed(1234)
 mpargs$management_lag <- 2
-resp3beff <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
+resp3beffc <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
+ctrl <- mpCtrl(list(ctrl.hcr = mseCtrl(method=fixedF.hcr, args=list(ftrg=0.3)),
+	ctrl.is = mseCtrl(method=effort.is),
+	ctrl.est = mseCtrl(method=sca.sa)))
 
+registerDoParallel(8)
+mpargs$nblocks <- 250
+set.seed(1234)
+mpargs$management_lag <- 2
+date()
+resp3beffb <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
+date()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# took about 15 minutes each iter cycle
 
 
 
