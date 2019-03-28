@@ -272,5 +272,16 @@ date()
 
 # took about 15 minutes each iter cycle
 
+#==============================================================================
+# ewg 19 02 hcr
+#==============================================================================
+ctrl <- mpCtrl(list(ctrl.hcr = mseCtrl(method=ewg1902.hcr, args=list(ftrg=0.3, ytrg=2024)),
+	ctrl.is = mseCtrl(method=effort.is),
+	ctrl.est = mseCtrl(method=perfect.sa)))
 
+registerDoParallel(3)
+mpargs$nblocks <- 3
+set.seed(1234)
+mpargs$management_lag <- 2
+resp3beffd <- mp(om, oem, iem, ctrl.mp=ctrl, genArgs=mpargs)
 
